@@ -108,6 +108,11 @@ func main() {
 			return
 		}
 
+		if len(groupIDs) == 0 {
+			c.JSON(http.StatusOK, gin.H{"success": false, "message": "There is no group to send message to"})
+			return
+		}
+
 		// 轉換 message 為 string
 		messageStr := string(message)
 		for chatID := range groupIDs {
