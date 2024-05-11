@@ -79,7 +79,7 @@ func main() {
 		return c.Send("Hello!")
 	})
 
-	bot.Group().Handle("/check-group", func(c tele.Context) error {
+	bot.Group().Handle("/startbot", func(c tele.Context) error {
 		groupId := c.Chat().ID
 		if _, isExist := groupIDs[groupId]; !isExist {
 			groupIDs[groupId] = true
