@@ -62,18 +62,19 @@ func main() {
 
 	// POST /push endpoint
 	router.POST("/push", func(c *gin.Context) {
-		var json struct {
-			Message string `json:"message"`
-		}
-
-		if err := c.BindJSON(&json); err != nil {
+		// 讀取純文本請求體
+		message, err := c.GetRawData()
+		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Bad request"})
 			return
 		}
 
+		// 轉換 message 為 string
+		messageStr := string(message)
+
 		// Send message to Telegram
 		//_, err := bot.Send(, json.Message) // Specify the ChatID correctly
-		_, err := bot.Send(tele.ChatID(cfg.ChatID), json.Message) // Specify the ChatID correctly
+		_, err = bot.Send(tele.ChatID(cfg.ChatID), messageStr) // Specify the ChatID correctly
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to send message"})
 			return
