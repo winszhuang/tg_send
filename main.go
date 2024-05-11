@@ -14,8 +14,9 @@ import (
 )
 
 type Config struct {
-	Token string `yaml:"token"`
-	XCode string `yaml:"x_code"`
+	Token  string `yaml:"token"`
+	XCode  string `yaml:"x_code"`
+	ApiUrl string `yaml:"api_url"`
 }
 
 func (c *Config) Load(path string) error {
@@ -94,6 +95,10 @@ func main() {
 
 	router.Use(XCodeAuthMiddleware(&cfg))
 
+	router.GET("/ping", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"success": true, "message": "pong"})
+	})
+
 	// POST /push endpoint
 	router.POST("/push", func(c *gin.Context) {
 		// 讀取純文本請求體
@@ -118,5 +123,25 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"success": true, "message": "Message sent"})
 	})
 
+	go pingServerPeriodically(cfg, router)
+
 	router.Run()
+}
+
+func pingServerPeriodically(cfg Config, router *gin.Engine) {
+	minutes := 13
+	ticker := time.NewTicker(time.Duration(minutes) * time.Minute)
+
+	for {
+		select {
+		case <-ticker.C:
+			url := cfg.ApiUrl + "/ping"
+			_, err := http.Get(url)
+			if err != nil {
+				fmt.Println("Error pinging web server:", err)
+			} else {
+				fmt.Println("Web server ping successful")
+			}
+		}
+	}
 }
