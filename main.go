@@ -14,9 +14,8 @@ import (
 )
 
 type Config struct {
-	Token  string `yaml:"token"`
-	ChatID int64  `yaml:"chat_id"`
-	XCode  string `yaml:"x_code"`
+	Token string `yaml:"token"`
+	XCode string `yaml:"x_code"`
 }
 
 func (c *Config) Load(path string) error {
