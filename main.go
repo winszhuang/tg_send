@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	tele "gopkg.in/telebot.v3"
@@ -15,6 +16,7 @@ import (
 type Config struct {
 	Token  string `yaml:"token"`
 	ChatID int64  `yaml:"chat_id"`
+	XCode  string `yaml:"x_code"`
 }
 
 func (c *Config) Load(path string) error {
@@ -26,7 +28,20 @@ func (c *Config) Load(path string) error {
 	return yaml.Unmarshal(yamlFile, c)
 }
 
-// chatId 1474301143
+func XCodeAuthMiddleware(cfg *Config) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		xCodeHeader := c.GetHeader("XCode")
+		if xCodeHeader != cfg.XCode {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"success": false,
+				"message": "Invalid or missing XCode header",
+			})
+			c.Abort() // 阻止請求繼續處理
+			return
+		}
+		c.Next() // 如果驗證通過，繼續處理後續的 Handler
+	}
+}
 
 func main() {
 	// 載入設定檔案
@@ -48,17 +63,37 @@ func main() {
 		return
 	}
 
+	// 群組 ID 存儲
+	groupIDs := make(map[int64]bool)
+
+	// 處理機器人加入新群組的事件
+	bot.Handle(tele.OnAddedToGroup, func(c tele.Context) error {
+		chatId := c.Chat().ID
+		groupIDs[chatId] = true
+		fmt.Printf("加入了新群組: %d\n", chatId)
+		return nil
+	})
+
 	bot.Handle("/hello", func(c tele.Context) error {
 		fmt.Println(c.Chat().ID)
 		return c.Send("Hello!")
 	})
 
-	go bot.Start()
+	bot.Group().Handle("/check-group", func(c tele.Context) error {
+		groupId := c.Chat().ID
+		if _, isExist := groupIDs[groupId]; !isExist {
+			groupIDs[groupId] = true
+		}
+		return nil
+	})
 
+	go bot.Start()
 	defer bot.Close()
 
 	// Setup Gin router
 	router := gin.Default()
+
+	router.Use(XCodeAuthMiddleware(&cfg))
 
 	// POST /push endpoint
 	router.POST("/push", func(c *gin.Context) {
@@ -71,13 +106,14 @@ func main() {
 
 		// 轉換 message 為 string
 		messageStr := string(message)
-
-		// Send message to Telegram
-		//_, err := bot.Send(, json.Message) // Specify the ChatID correctly
-		_, err = bot.Send(tele.ChatID(cfg.ChatID), messageStr) // Specify the ChatID correctly
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to send message"})
-			return
+		for chatID := range groupIDs {
+			_, err := bot.Send(tele.ChatID(chatID), messageStr)
+			if err != nil {
+				if strings.Contains(err.Error(), "the group chat was deleted") {
+					fmt.Println(err.Error())
+					delete(groupIDs, chatID)
+				}
+			}
 		}
 
 		c.JSON(http.StatusOK, gin.H{"success": true, "message": "Message sent"})
